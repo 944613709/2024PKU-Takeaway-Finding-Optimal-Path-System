@@ -1,112 +1,107 @@
 package util;
 
+import model.*;
 import com.google.gson.Gson;
-import model.Customer;
-import model.Path;
-import model.Restaurant;
+import com.google.gson.GsonBuilder;
 import java.io.*;
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class DataGenerator {
     private static final Random random = new Random();
-    private static final double MIN_LAT = 31.2;  // 上海市经纬度范围
-    private static final double MAX_LAT = 31.4;
-    private static final double MIN_LON = 121.3;
-    private static final double MAX_LON = 121.5;
     
-    public static void generateAndSaveTestData(int numRestaurants, int numCustomers, 
-                                             int pathsPerCustomer, String fileName) {
-        Map<String, Object> data = new HashMap<>();
-        
-        // 生成餐厅数据
-        List<Restaurant> restaurants = new ArrayList<>();
-        for (int i = 0; i < numRestaurants; i++) {
-            restaurants.add(new Restaurant(i,
-                MIN_LAT + random.nextDouble() * (MAX_LAT - MIN_LAT),
-                MIN_LON + random.nextDouble() * (MAX_LON - MIN_LON)
-            ));
-        }
-        
-        // 生成顾客数据
-        List<Customer> customers = new ArrayList<>();
-        for (int i = 0; i < numCustomers; i++) {
-            customers.add(new Customer(i,
-                MIN_LAT + random.nextDouble() * (MAX_LAT - MIN_LAT),
-                MIN_LON + random.nextDouble() * (MAX_LON - MIN_LON)
-            ));
-        }
-        
-        // 生成路径数据
-        Map<String, List<Path>> paths = new HashMap<>();
-        for (Customer customer : customers) {
-            List<Path> customerPaths = new ArrayList<>();
-            for (int i = 0; i < pathsPerCustomer; i++) {
-                double distance = 1 + random.nextDouble() * 10; // 1-10公里
-                double cost = distance * (0.8 + random.nextDouble() * 0.4); // 基于距离的成本
-                double time = distance * (3 + random.nextDouble() * 2); // 基于距离的时间
-                customerPaths.add(new Path(distance, cost, time));
+    public static void generateAndSaveTestData(int restaurantCount, int customerCount, int pathsPerCustomer, String filename) {
+        try {
+            // 生成数据
+            Map<String, Object> data = new HashMap<>();
+            
+            // 生成餐厅数据
+            List<Restaurant> restaurants = new ArrayList<>();
+            for (int i = 0; i < restaurantCount; i++) {
+                restaurants.add(new Restaurant(i));
             }
-            paths.put("customer_" + customer.getId(), customerPaths);
-        }
-        
-        data.put("restaurants", restaurants);
-        data.put("customers", customers);
-        data.put("paths", paths);
-        
-        // 保存到JSON文件
-        try (FileWriter writer = new FileWriter(fileName)) {
-            new Gson().toJson(data, writer);
+            data.put("restaurants", restaurants);
+            
+            // 生成顾客数据
+            List<Customer> customers = new ArrayList<>();
+            for (int i = 0; i < customerCount; i++) {
+                customers.add(new Customer(i));
+            }
+            data.put("customers", customers);
+            
+            // 为每个顾客生成多条可选路径
+            Map<String, List<Path>> paths = new HashMap<>();
+            for (int i = 0; i < customerCount; i++) {
+                List<Path> customerPaths = new ArrayList<>();
+                for (int j = 0; j < pathsPerCustomer; j++) {
+                    // 生成随机路径属性
+                    double distance = 1 + random.nextDouble() * 9; // 1-10公里
+                    double costFactor = 0.8 + random.nextDouble() * 0.4; // 0.8-1.2的随机系数
+                    double cost = distance * costFactor;
+                    double timePerKm = 3 + random.nextDouble() * 2; // 3-5分钟/公里
+                    double time = distance * timePerKm;
+                    
+                    customerPaths.add(new Path(distance, cost, time));
+                }
+                paths.put("customer_" + i, customerPaths);
+            }
+            data.put("paths", paths);
+            
+            // 保存到JSON文件
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
+            try (FileWriter writer = new FileWriter(filename)) {
+                gson.toJson(data, writer);
+            }
+            
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Error generating test data: " + e.getMessage());
         }
     }
     
-    public static Map<String, Object> loadTestData(String fileName) {
-        try (FileReader reader = new FileReader(fileName)) {
+    public static Map<String, Object> loadTestData(String filename) {
+        try {
             Gson gson = new Gson();
-            Map<String, Object> rawData = gson.fromJson(reader, Map.class);
             Map<String, Object> convertedData = new HashMap<>();
             
-            // 转换餐厅数据
-            List<Map<String, Object>> rawRestaurants = (List<Map<String, Object>>) rawData.get("restaurants");
-            List<Restaurant> restaurants = rawRestaurants.stream()
-                .map(map -> new Restaurant(
-                    ((Double) map.get("id")).intValue(),
-                    (Double) map.get("latitude"),
-                    (Double) map.get("longitude")))
-                .collect(Collectors.toList());
-            
-            // 转换顾客数据
-            List<Map<String, Object>> rawCustomers = (List<Map<String, Object>>) rawData.get("customers");
-            List<Customer> customers = rawCustomers.stream()
-                .map(map -> new Customer(
-                    ((Double) map.get("id")).intValue(),
-                    (Double) map.get("latitude"),
-                    (Double) map.get("longitude")))
-                .collect(Collectors.toList());
-            
-            // 转换路径数据
-            Map<String, List<Map<String, Object>>> rawPaths = (Map<String, List<Map<String, Object>>>) rawData.get("paths");
-            Map<String, List<Path>> paths = new HashMap<>();
-            
-            rawPaths.forEach((key, value) -> {
-                List<Path> pathList = value.stream()
-                    .map(map -> new Path(
-                        (Double) map.get("distance"),
-                        (Double) map.get("cost"),
-                        (Double) map.get("time")))
-                    .collect(Collectors.toList());
-                paths.put(key, pathList);
-            });
-            
-            convertedData.put("restaurants", restaurants);
-            convertedData.put("customers", customers);
-            convertedData.put("paths", paths);
-            
-            return convertedData;
+            try (FileReader reader = new FileReader(filename)) {
+                Map<String, Object> rawData = gson.fromJson(reader, Map.class);
+                
+                // 转换餐厅数据
+                List<Map<String, Object>> rawRestaurants = (List<Map<String, Object>>) rawData.get("restaurants");
+                List<Restaurant> restaurants = new ArrayList<>();
+                for (Map<String, Object> map : rawRestaurants) {
+                    restaurants.add(new Restaurant(((Double) map.get("id")).intValue()));
+                }
+                convertedData.put("restaurants", restaurants);
+                
+                // 转换顾客数据
+                List<Map<String, Object>> rawCustomers = (List<Map<String, Object>>) rawData.get("customers");
+                List<Customer> customers = new ArrayList<>();
+                for (Map<String, Object> map : rawCustomers) {
+                    customers.add(new Customer(((Double) map.get("id")).intValue()));
+                }
+                convertedData.put("customers", customers);
+                
+                // 转换路径数据
+                Map<String, List<Map<String, Object>>> rawPaths = (Map<String, List<Map<String, Object>>>) rawData.get("paths");
+                Map<String, List<Path>> paths = new HashMap<>();
+                
+                for (Map.Entry<String, List<Map<String, Object>>> entry : rawPaths.entrySet()) {
+                    List<Path> pathList = new ArrayList<>();
+                    for (Map<String, Object> pathMap : entry.getValue()) {
+                        pathList.add(new Path(
+                            (Double) pathMap.get("distance"),
+                            (Double) pathMap.get("cost"),
+                            (Double) pathMap.get("time")
+                        ));
+                    }
+                    paths.put(entry.getKey(), pathList);
+                }
+                convertedData.put("paths", paths);
+                
+                return convertedData;
+            }
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Error loading test data: " + e.getMessage());
             return null;
         }
     }
