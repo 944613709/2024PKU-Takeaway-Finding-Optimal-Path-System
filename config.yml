@@ -1,0 +1,18 @@
+algorithm:
+  type: GA  # GA|SA|ACO|TS
+  parameters:
+    GA:
+      populationSize: 100
+      maxGenerations: 1000
+      mutationRate: 0.1
+    SA:
+      initialTemp: 100.0
+      coolingRate: 0.95
+      finalTemp: 0.01
+    ACO:
+      antCount: 50
+      pheromoneWeight: 1.0
+      evaporationRate: 0.1
+    TS:
+      tabuListSize: 20
+      maxIterations: 500 
