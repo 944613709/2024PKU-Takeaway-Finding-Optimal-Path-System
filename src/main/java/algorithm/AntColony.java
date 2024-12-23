@@ -92,16 +92,19 @@ public class AntColony implements OptimizationAlgorithm {
     }
     
     private void updatePheromones(double[][] pheromones, List<Solution> solutions, Problem problem) {
-        // 信息素蒸发
+        // 1. 信息素蒸发
         for (int i = 0; i < pheromones.length; i++) {
             for (int j = 0; j < pheromones[i].length; j++) {
                 pheromones[i][j] *= (1 - evaporationRate);
             }
         }
         
-        // 信息素沉积
+        // 2. 信息素沉积
         for (Solution solution : solutions) {
+            // contribution越小，说明成本越高（包括时间惩罚）
             double contribution = 1.0 / calculateCost(solution, problem);
+            
+            // 为解决方案使用的每条路径增加信息素
             for (int i = 0; i < solution.getPathIndices().length; i++) {
                 pheromones[i][solution.getPathIndices()[i]] += contribution;
             }
@@ -112,17 +115,19 @@ public class AntColony implements OptimizationAlgorithm {
         double totalCost = 0;
         double totalTime = 0;
         
+        // 1. 计算基础成本和时间
         for (int i = 0; i < solution.getPathIndices().length; i++) {
             Path path = problem.getPaths().get("customer_" + i).get(solution.getPathIndices()[i]);
-            totalCost += path.getDistance() + path.getCost();
-            totalTime += path.getTime();
+            totalCost += path.getDistance() + path.getCost();  // 基础成本 = 距离 + 成本
+            totalTime += path.getTime();                       // 累计时间
         }
         
+        // 2. 如果超时，添加惩罚成本
         if (totalTime > problem.getTimeConstraint()) {
-            totalCost += (totalTime - problem.getTimeConstraint()) * 1000;
+            totalCost += (totalTime - problem.getTimeConstraint()) * 1000;  // 惩罚因子为1000
         }
         
-        return totalCost;
+        return totalCost;  // 返回总成本（包括可能的时间惩罚）
     }
     
     private void updateSolutionMetrics(Solution solution, Problem problem) {
