@@ -1,4 +1,5 @@
 import util.DataGenerator;
+import util.ExperimentLogger;
 import algorithm.*;
 import model.*;
 import java.util.*;
@@ -26,6 +27,12 @@ public class Main {
             return;
         }
         
+        // 在生成数据后添加验证
+        if (!DataGenerator.validateDataset(data, 120.0)) {
+            System.out.println("警告：生成的数据集可能不包含行解！");
+            return;
+        }
+        
         // 3. 创建问题实例
         Problem problem = new Problem(
             (List<Customer>) data.get("customers"),
@@ -37,17 +44,38 @@ public class Main {
         OptimizationAlgorithm algorithm = AlgorithmFactory.createAlgorithm(algorithmType, parameters);
         System.out.printf("使用 %s 求解...\n", algorithm.getName());
         
+        // 初始化实验记录
+        ExperimentLogger.initializeExperiment(algorithm.getName());
+        
         // 5. 运行算法求解
         long startTime = System.currentTimeMillis();
         Solution solution = algorithm.solve(problem);
-        long endTime = System.currentTimeMillis();
+        long solvingTime = System.currentTimeMillis() - startTime;
+        
+        // 记录实验结果
+        Map<String, Object> config = loadConfig();
+        String dataStrategy = (String) ((Map<String, Object>)config.get("dataGeneration"))
+            .getOrDefault("strategy", "B");
+        
+        ExperimentLogger.logExperimentResult(
+            algorithm.getName(),
+            problem.getCustomers().size(),
+            problem.getPaths().get("customer_0").size(),
+            solution,
+            solvingTime,
+            dataStrategy,
+            problem.getTimeConstraint()
+        );
+        
+        // 保存实验结果
+        ExperimentLogger.saveResults();
         
         // 6. 输出结果
         if (solution != null) {
             System.out.println("\n求解完成！");
             System.out.println("总配送成本: " + solution.getTotalCost());
             System.out.println("总配送时间: " + solution.getTotalTime() + " 分钟");
-            System.out.println("求解耗时: " + (endTime - startTime) + " 毫秒");
+            System.out.println("求解耗时: " + solvingTime + " 毫秒");
             
             System.out.println("\n配送路径详情:");
             int[] pathIndices = solution.getPathIndices();
@@ -65,7 +93,7 @@ public class Main {
                 return args[i + 1];
             }
         }
-        return "GA"; // 默认使用遗传算法
+        return "ACO"; // 默认使用
     }
     
     private static Map<String, Object> loadParameters() {
@@ -75,6 +103,15 @@ public class Main {
             return (Map<String, Object>) ((Map<String, Object>) config.get("algorithm")).get("parameters");
         } catch (Exception e) {
             System.out.println("使用默认参数配置");
+            return new HashMap<>();
+        }
+    }
+    
+    private static Map<String, Object> loadConfig() {
+        try (InputStream input = new FileInputStream("config.yml")) {
+            return new Yaml().load(input);
+        } catch (Exception e) {
+            System.out.println("使用默认配置");
             return new HashMap<>();
         }
     }

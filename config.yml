@@ -16,3 +16,14 @@ algorithm:
     TS:
       tabuListSize: 20
       maxIterations: 500 
+
+dataGeneration:
+  strategy: "B"          # 生成策略：A-纯随机，B-保底可行
+  timeConstraint: 120.0  # 总时间约束
+  minTimePerCustomer: 2.0
+  maxTimePerCustomer: 10.0
+  minDistance: 1.0
+  maxDistance: 10.0
+  costFactor:
+    min: 0.8
+    max: 1.2

@@ -44,6 +44,9 @@ buildNumber.properties
 # Test data files
 *.json
 
+# Experiment results
+experiment_results/
+
 # OS generated files
 .DS_Store
 .DS_Store?

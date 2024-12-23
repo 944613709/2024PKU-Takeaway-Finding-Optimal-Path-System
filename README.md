@@ -73,7 +73,96 @@ q<sub>i,time</sub> 表示服务第 i 个客户所需的时间。
 
 ## 设计思路
 
-### 1.数据集生成设计
+### 1. 数据集生成设计
+
+#### 1.0 数据生成策略
+
+系统提供两种数据生成策略，用户可以根据需求选择：
+
+###### 策略A：纯随机生成
+
+完全随机生成所有路径，适合测试算法的鲁棒性：
+
+```java
+// 为每个顾客生成随机路径
+for (int i = 0; i < customerCount; i++) {
+    List<Path> paths = new ArrayList<>();
+    for (int j = 0; j < pathsPerCustomer; j++) {
+        double distance = 1 + random.nextDouble() * 9;  // 1-10公里
+        double costFactor = 0.8 + random.nextDouble() * 0.4;
+        double cost = distance * costFactor;
+        double timePerKm = 3 + random.nextDouble() * 2;  // 3-5分钟/公里
+        double time = distance * timePerKm;
+        paths.add(new Path(distance, cost, time));
+    }
+}
+```
+
+特点：
+- 完全随机生成
+- 不保证存在可行解
+- 更接近真实场景
+- 适合测试算法的容错能力
+
+###### 策略B：保底可行生成
+
+为确保生成的数据集包含可行解，采用了"自顶向下"的时间分配策略：
+
+1. **时间分配机制**
+   ```java
+   // 总时间约束 = 120分钟
+   remainingTime = timeConstraint;
+   
+   // 为每个顾客预分配时间
+   for (customer in customers) {
+       maxTime = remainingTime * 0.5;  // 最多使用剩余时间的一半
+       customerTime = random(2, min(maxTime - 2, 8));
+       remainingTime -= customerTime;
+   }
+   ```
+
+2. **路径生成策略**
+   - **保底路径**：每个顾客至少有一条满足时间约束的路径
+   - **随机路径**：其他路径随机生成，增加问题难度
+   - **路径打乱**：随机打乱路径顺序，避免算法偏向
+
+特点：
+- 保证至少存在一个可行解
+- 结合确定性和随机性
+- 适合算法性能测试
+- 便于结果验证
+
+**策略选择建议：**
+1. 算法开发测试阶段：使用策略B
+2. 算法性能评估：使用策略B
+3. 算法鲁棒性测试：使用策略A
+4. 实际应用场景：使用策略A
+
+3. **数据验证**
+   ```java
+   // 验证是否存在可行解
+   for (customer in customers) {
+       minTime = findMinTimePath(customer);
+       totalTime += minTime;
+       if (totalTime > timeConstraint) {
+           return false;  // 数据集不可行
+       }
+   }
+   ```
+
+4. **参数配置**
+   ```yaml
+   dataGeneration:
+     strategy: "B"          # 生成策略：A-纯随机，B-保底可行
+     timeConstraint: 120.0  # 总时间约束
+     minTimePerCustomer: 2.0
+     maxTimePerCustomer: 10.0
+     minDistance: 1.0
+     maxDistance: 10.0
+     costFactor:
+       min: 0.8
+       max: 1.2
+   ```
 
 #### 1.1 数据生成流程
 
@@ -81,14 +170,15 @@ q<sub>i,time</sub> 表示服务第 i 个客户所需的时间。
 flowchart TD
     A[开始生成数据] --> B[生成餐厅数据]
     B --> C[生成顾客数据]
-    C --> D[为每个顾客生成多条可选路径]
+    C --> D[为每个顾客生成可行路径]
     D --> E[计算路径属性]
-    E --> F[保存为JSON文件]
+    E --> V[验证数据集可行性]
+    V --> F[保存为JSON文件]
     
     subgraph 路径生成
-        E --> E1[生成随机距离]
-        E1 --> E2[基于距离计算成本]
-        E2 --> E3[基于距离计算时间]
+        E --> E1[生成保底可行路径]
+        E1 --> E2[生成随机补充路径]
+        E2 --> E3[打乱路径顺序]
     end
 ```
 
@@ -108,6 +198,7 @@ classDiagram
         +double distance
         +double cost
         +double time
+        +boolean isFeasible
     }
     
     Customer "1" -- "n" Path
@@ -117,32 +208,24 @@ classDiagram
 #### 1.3. 数据生成策略
 
 1. **路径属性生成**
-   - 距离：1-10公里随机生成
-   - 成本：基于距离计算，考虑0.8-1.2的随机系数
-   - 时间：基于距离计算，考虑路况影响（3-5分钟/公里）
+   - **保底路径**
+     - 距离 = 分配时间 / 4.0（假设速度4分钟/公里）
+     - 成本 = 距离 * (0.8-1.2的随机系数)
+     - 时间 = 预分配的可行时间
+   - **随机路径**
+     - 距离：1-10公里随机生成
+     - 成本：距离 * (0.8-1.2的随机系数)
+     - 时间：距离 * (3-5分钟/公里)
 
 2. **数据规模**
    - 餐厅数量：可配置（默认10个）
    - 顾客数量：可配置（默认20个）
    - 每个顾客的可选路径数：可配置（默认5条）
 
-#### 1.4. JSON数据格式
-
-```mermaid
-graph TD
-    A[JSON根对象] --> B[restaurants数组]
-    A --> C[customers数组]
-    A --> D[paths对象]
-    D --> E[customer_0]
-    D --> F[customer_1]
-    D --> G[...]
-    E --> H[路径数组]
-    H --> I[路径1]
-    H --> J[路径2]
-    H --> K[...]
-```
-
-
+3. **可行性保证**
+   - 时间分配：自顶向下，确保总时间约束
+   - 路径生成：至少一条可行路径
+   - 数据验证：检查最短时间路径组合
 
 ### 2. 问题建模
 - **决策变量**：每个顾客的配送路径选择
@@ -228,7 +311,7 @@ if (newCost < currentCost) {
 **基本原理：**
 1. **信息素机制**
    - 蚂蚁在路径上留下信息素
-   - 信息素浓度影响路径选择概率
+   - ���息素浓度影响路径选择概率
    - 信息素会随时间蒸发
 
 **核心组件：**
@@ -241,7 +324,7 @@ if (newCost < currentCost) {
 2. **信息素更新**
    ```java
    // 蒸发
-   信息素 = (1 - ρ) * 信息素
+   信息素 = (1 - ��) * 信息素
    
    // 沉积
    信息素 += Q / 路径成本  // Q为常数
