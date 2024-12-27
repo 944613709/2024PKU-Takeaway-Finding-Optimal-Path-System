@@ -29,7 +29,7 @@ public class Main {
         
         // 在生成数据后添加验证
         if (!DataGenerator.validateDataset(data, 120.0)) {
-            System.out.println("警告：生成的数据集可能不包含行解！");
+            System.out.println("警告：生���的数据集可能不包含可行解！");
             return;
         }
         
@@ -45,7 +45,8 @@ public class Main {
         System.out.printf("使用 %s 求解...\n", algorithm.getName());
         
         // 初始化实验记录
-        ExperimentLogger.initializeExperiment(algorithm.getName());
+        ExperimentLogger.initializeExperiment("单次运行结果");
+        ExperimentLogger.addSheet("运行结果");
         
         // 5. 运行算法求解
         long startTime = System.currentTimeMillis();
@@ -57,15 +58,18 @@ public class Main {
         String dataStrategy = (String) ((Map<String, Object>)config.get("dataGeneration"))
             .getOrDefault("strategy", "B");
         
-        ExperimentLogger.logExperimentResult(
-            algorithm.getName(),
-            problem.getCustomers().size(),
-            problem.getPaths().get("customer_0").size(),
-            solution,
-            solvingTime,
-            dataStrategy,
-            problem.getTimeConstraint()
-        );
+        Map<String, Object> result = new HashMap<>();
+        result.put("算法类型", algorithm.getName());
+        result.put("问题规模(顾客数)", problem.getCustomers().size());
+        result.put("路径数/顾客", problem.getPaths().get("customer_0").size());
+        result.put("总配送成本", solution.getTotalCost());
+        result.put("总配送时间(分钟)", solution.getTotalTime());
+        result.put("是否可行解", solution.getTotalTime() <= problem.getTimeConstraint() ? "是" : "否");
+        result.put("求解时间(ms)", solvingTime);
+        result.put("数据生成策略", dataStrategy);
+        result.put("时间约束", problem.getTimeConstraint());
+        
+        ExperimentLogger.logResult(result);
         
         // 保存实验结果
         ExperimentLogger.saveResults();
@@ -93,7 +97,7 @@ public class Main {
                 return args[i + 1];
             }
         }
-        return "ACO"; // 默认使用
+        return "ACO"; // 默认使用蚁群算法
     }
     
     private static Map<String, Object> loadParameters() {

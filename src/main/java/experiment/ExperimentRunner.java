@@ -2,7 +2,7 @@ package experiment;
 
 import algorithm.*;
 import model.*;
-import util.DataGenerator;
+import util.*;
 import java.util.*;
 
 public class ExperimentRunner {
@@ -10,8 +10,12 @@ public class ExperimentRunner {
     private static final String[] ALGORITHMS = {"GA", "SA", "ACO", "TS", "DP", "RL"};
     
     public static void main(String[] args) {
+        // 初始化实验记录器
+        ExperimentLogger.initializeExperiment("实验结果");
+        
         // 1. 有效性实验数据集
         System.out.println("\n=== 有效性实验 ===");
+        ExperimentLogger.addSheet("有效性实验");
         Map<String, Object> effectivenessData = generateTestData("effectiveness_test.json");
         Problem effectivenessProblem = createProblem(effectivenessData);
         for (String algorithmType : ALGORITHMS) {
@@ -21,6 +25,7 @@ public class ExperimentRunner {
         
         // 2. 效率实验数据集
         System.out.println("\n=== 效率实验 ===");
+        ExperimentLogger.addSheet("效率实验");
         int[] sizes = {10, 20, 50, 100};
         for (int size : sizes) {
             String dataFile = String.format("efficiency_test_%d.json", size);
@@ -34,6 +39,7 @@ public class ExperimentRunner {
         
         // 3. 稳定性实验数据集
         System.out.println("\n=== 稳定性实验 ===");
+        ExperimentLogger.addSheet("稳定性实验");
         Map<String, Object> stabilityData = generateTestData("stability_test.json");
         Problem stabilityProblem = createProblem(stabilityData);
         for (String algorithmType : ALGORITHMS) {
@@ -43,6 +49,7 @@ public class ExperimentRunner {
         
         // 4. 适应性实验数据集
         System.out.println("\n=== 适应性实验 ===");
+        ExperimentLogger.addSheet("适应性实验");
         Map<String, Object> adaptabilityData = generateTestData("adaptability_test.json");
         for (String algorithmType : ALGORITHMS) {
             System.out.printf("\n使用 %s:\n", algorithmType);
@@ -51,9 +58,13 @@ public class ExperimentRunner {
         
         // 5. 算法对比实验
         System.out.println("\n=== 算法对比实验 ===");
+        ExperimentLogger.addSheet("算法对比实验");
         Map<String, Object> comparisonData = generateTestData("comparison_test.json");
         Problem comparisonProblem = createProblem(comparisonData);
         runComparisonExperiment(comparisonProblem);
+        
+        // 保存所有实验结果
+        ExperimentLogger.saveResults();
     }
     
     private static Map<String, Object> generateTestData(String filename) {
@@ -78,10 +89,19 @@ public class ExperimentRunner {
         OptimizationAlgorithm algorithm = AlgorithmFactory.createAlgorithm(algorithmType, new HashMap<>());
         Solution solution = algorithm.solve(problem);
         
+        // 控制台输出
         System.out.printf("总成本: %.2f\n", solution.getTotalCost());
         System.out.printf("总时间: %.2f 分钟\n", solution.getTotalTime());
         System.out.printf("是否满足时间约束: %s\n", 
             solution.getTotalTime() <= problem.getTimeConstraint() ? "是" : "否");
+            
+        // Excel记录
+        Map<String, Object> result = new HashMap<>();
+        result.put("算法类型", algorithmType);
+        result.put("总成本", solution.getTotalCost());
+        result.put("总时间(分钟)", solution.getTotalTime());
+        result.put("是否满足时间约束", solution.getTotalTime() <= problem.getTimeConstraint() ? "是" : "否");
+        ExperimentLogger.logResult(result);
     }
     
     private static void runEfficiencyExperiment(Problem problem, String algorithmType, int size) {
@@ -89,9 +109,19 @@ public class ExperimentRunner {
         OptimizationAlgorithm algorithm = AlgorithmFactory.createAlgorithm(algorithmType, new HashMap<>());
         Solution solution = algorithm.solve(problem);
         long endTime = System.currentTimeMillis();
+        long duration = endTime - startTime;
         
+        // 控制台输出
         System.out.printf("%s: 耗时 %d ms, 成本 %.2f\n",
-            algorithmType, (endTime - startTime), solution.getTotalCost());
+            algorithmType, duration, solution.getTotalCost());
+            
+        // Excel记录
+        Map<String, Object> result = new HashMap<>();
+        result.put("问题规模", size);
+        result.put("算法类型", algorithmType);
+        result.put("耗时(ms)", duration);
+        result.put("总成本", solution.getTotalCost());
+        ExperimentLogger.logResult(result);
     }
     
     private static void runStabilityExperiment(Problem problem, String algorithmType) {
@@ -105,10 +135,23 @@ public class ExperimentRunner {
             times.add(solution.getTotalTime());
         }
         
-        System.out.printf("成本: 平均值=%.2f, 方差=%.2f\n",
-            calculateMean(costs), calculateVariance(costs));
-        System.out.printf("时间: 平均值=%.2f, 方差=%.2f\n",
-            calculateMean(times), calculateVariance(times));
+        double costMean = calculateMean(costs);
+        double costVariance = calculateVariance(costs);
+        double timeMean = calculateMean(times);
+        double timeVariance = calculateVariance(times);
+        
+        // 控制台输出
+        System.out.printf("成本: 平均值=%.2f, 方差=%.2f\n", costMean, costVariance);
+        System.out.printf("时间: 平均值=%.2f, 方差=%.2f\n", timeMean, timeVariance);
+        
+        // Excel记录
+        Map<String, Object> result = new HashMap<>();
+        result.put("算法类型", algorithmType);
+        result.put("成本平均值", costMean);
+        result.put("成本方差", costVariance);
+        result.put("时间平均值", timeMean);
+        result.put("时间方差", timeVariance);
+        ExperimentLogger.logResult(result);
     }
     
     private static void runAdaptabilityExperiment(String algorithmType, Map<String, Object> data) {
@@ -124,8 +167,17 @@ public class ExperimentRunner {
             OptimizationAlgorithm algorithm = AlgorithmFactory.createAlgorithm(algorithmType, new HashMap<>());
             Solution solution = algorithm.solve(problem);
             
+            // 控制台输出
             System.out.printf("时间约束 %.1f: 实际时间=%.1f, 成本=%.2f\n",
                 constraint, solution.getTotalTime(), solution.getTotalCost());
+                
+            // Excel记录
+            Map<String, Object> result = new HashMap<>();
+            result.put("算法类型", algorithmType);
+            result.put("时间约束", constraint);
+            result.put("实际时间", solution.getTotalTime());
+            result.put("总成本", solution.getTotalCost());
+            ExperimentLogger.logResult(result);
         }
     }
     
@@ -140,14 +192,20 @@ public class ExperimentRunner {
                 costs.add(solution.getTotalCost());
             }
             results.put(algorithmType, costs);
-        }
-        
-        System.out.println("\n各算法性能对比:");
-        for (Map.Entry<String, List<Double>> entry : results.entrySet()) {
+            
+            double meanCost = calculateMean(costs);
+            double varianceCost = calculateVariance(costs);
+            
+            // 控制台输出
             System.out.printf("%s: 平均成本=%.2f, 方差=%.2f\n",
-                entry.getKey(),
-                calculateMean(entry.getValue()),
-                calculateVariance(entry.getValue()));
+                algorithmType, meanCost, varianceCost);
+                
+            // Excel记录
+            Map<String, Object> result = new HashMap<>();
+            result.put("算法类型", algorithmType);
+            result.put("平均成本", meanCost);
+            result.put("成本方差", varianceCost);
+            ExperimentLogger.logResult(result);
         }
     }
     
