@@ -1,5 +1,5 @@
 algorithm:
-  type: GA  # GA|SA|ACO|TS
+  type: GA  # GA|SA|ACO|TS|DP|RL
   parameters:
     GA:
       populationSize: 100
@@ -15,7 +15,14 @@ algorithm:
       evaporationRate: 0.1
     TS:
       tabuListSize: 20
-      maxIterations: 500 
+      maxIterations: 500
+    DP:
+      maxStates: 1000000
+    RL:
+      episodes: 1000
+      learningRate: 0.1
+      discountFactor: 0.9
+      epsilon: 0.1
 
 dataGeneration:
   strategy: "B"          # 生成策略：A-纯随机，B-保底可行

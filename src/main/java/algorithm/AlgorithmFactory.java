@@ -9,6 +9,8 @@ public class AlgorithmFactory {
             case "SA" -> new SimulatedAnnealing(parameters);
             case "ACO" -> new AntColony(parameters);
             case "TS" -> new TabuSearch(parameters);
+            case "DP" -> new DynamicProgramming(parameters);
+            case "RL" -> new ReinforcementLearning(parameters);
             default -> throw new IllegalArgumentException("Unknown algorithm type: " + type);
         };
     }
