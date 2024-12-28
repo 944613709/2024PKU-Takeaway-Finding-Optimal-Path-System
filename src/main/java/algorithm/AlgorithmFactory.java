@@ -11,6 +11,7 @@ public class AlgorithmFactory {
             case "TS" -> new TabuSearch(parameters);
             case "DP" -> new DynamicProgramming(parameters);
             case "RL" -> new ReinforcementLearning(parameters);
+            case "BK" -> new BacktrackingAlgorithm(parameters);
             default -> throw new IllegalArgumentException("Unknown algorithm type: " + type);
         };
     }
