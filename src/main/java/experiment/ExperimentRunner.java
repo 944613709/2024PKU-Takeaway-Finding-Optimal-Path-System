@@ -12,7 +12,7 @@ public class ExperimentRunner {
     public static void main(String[] args) {
         // 初始化实验记录器
         ExperimentLogger.initializeExperiment("实验结果");
-        
+        System.out.println("\n=== 开始实验 ===");
         // 1. 有效性实验数据集
         System.out.println("\n=== 有效性实验 ===");
         ExperimentLogger.addSheet("有效性实验");
