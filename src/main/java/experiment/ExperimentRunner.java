@@ -6,21 +6,30 @@ import util.*;
 import java.util.*;
 
 public class ExperimentRunner {
-    private static final int REPEAT_TIMES = 10;
+    private static final int REPEAT_TIMES = 30;
     private static final String[] ALGORITHMS = {"GA", "SA", "ACO", "TS", "RL", "BK"};
     
     public static void main(String[] args) {
         // 初始化实验记录器
         ExperimentLogger.initializeExperiment("实验结果");
-        System.out.println("\n=== 开始实验 ===");
+        
         // 1. 有效性实验数据集
         System.out.println("\n=== 有效性实验 ===");
         ExperimentLogger.addSheet("有效性实验");
-        Map<String, Object> effectivenessData = generateTestData("effectiveness_test.json");
+        Map<String, Object> effectivenessData = generateTestData("effectiveness_test.json", 5, 30, 5); // 使用较小的数据集以便回溯算法能在合理时间内找到最优解
         Problem effectivenessProblem = createProblem(effectivenessData);
+        
+        // 首先使用回溯算法找到最优解
+        System.out.println("\n使用回溯算法寻找最优解:");
+        OptimizationAlgorithm backtracking = AlgorithmFactory.createAlgorithm("BK", new HashMap<>());
+        Solution optimalSolution = backtracking.solve(effectivenessProblem);
+        System.out.printf("最优解成本: %.2f\n", optimalSolution.getTotalCost());
+        System.out.printf("最优解时间: %.2f 分钟\n", optimalSolution.getTotalTime());
+        
+        // 然后测试其他算法
         for (String algorithmType : ALGORITHMS) {
             System.out.printf("\n使用 %s:\n", algorithmType);
-            runEffectivenessExperiment(effectivenessProblem, algorithmType);
+            runEffectivenessExperiment(effectivenessProblem, algorithmType, optimalSolution);
         }
         
         // 2. 效率实验数据集
@@ -85,13 +94,19 @@ public class ExperimentRunner {
         );
     }
     
-    private static void runEffectivenessExperiment(Problem problem, String algorithmType) {
+    private static void runEffectivenessExperiment(Problem problem, String algorithmType, Solution optimalSolution) {
         OptimizationAlgorithm algorithm = AlgorithmFactory.createAlgorithm(algorithmType, new HashMap<>());
         Solution solution = algorithm.solve(problem);
         
+        // 计算与最优解的差距
+        double costGap = ((solution.getTotalCost() - optimalSolution.getTotalCost()) / optimalSolution.getTotalCost()) * 100;
+        double timeGap = ((solution.getTotalTime() - optimalSolution.getTotalTime()) / optimalSolution.getTotalTime()) * 100;
+        
         // 控制台输出
-        System.out.printf("总成本: %.2f\n", solution.getTotalCost());
-        System.out.printf("总时间: %.2f 分钟\n", solution.getTotalTime());
+        System.out.printf("总成本: %.2f (与最优解差距: %.2f%%)\n", 
+            solution.getTotalCost(), costGap);
+        System.out.printf("总时间: %.2f 分钟 (与最优解差距: %.2f%%)\n", 
+            solution.getTotalTime(), timeGap);
         System.out.printf("是否满足时间约束: %s\n", 
             solution.getTotalTime() <= problem.getTimeConstraint() ? "是" : "否");
             
@@ -99,7 +114,11 @@ public class ExperimentRunner {
         Map<String, Object> result = new HashMap<>();
         result.put("算法类型", algorithmType);
         result.put("总成本", solution.getTotalCost());
+        result.put("最优解成本", optimalSolution.getTotalCost());
+        result.put("成本差距(%)", costGap);
         result.put("总时间(分钟)", solution.getTotalTime());
+        result.put("最优解时间(分钟)", optimalSolution.getTotalTime());
+        result.put("时间差距(%)", timeGap);
         result.put("是否满足时间约束", solution.getTotalTime() <= problem.getTimeConstraint() ? "是" : "否");
         ExperimentLogger.logResult(result);
     }
