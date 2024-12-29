@@ -7,7 +7,7 @@ import java.util.*;
 
 public class ExperimentRunner {
     private static final int REPEAT_TIMES = 10;
-    private static final String[] ALGORITHMS = {"GA", "SA", "ACO", "TS", "DP", "RL"};
+    private static final String[] ALGORITHMS = {"GA", "SA", "ACO", "TS", "DP", "RL", "BK"};
     
     public static void main(String[] args) {
         // 初始化实验记录器
