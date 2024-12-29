@@ -2,7 +2,7 @@ package algorithm;
 
 import model.*;
 import java.util.*;
-
+@Deprecated
 public class DynamicProgramming implements OptimizationAlgorithm {
     private final int maxStates;
     private Map<String, CacheEntry> memo;
