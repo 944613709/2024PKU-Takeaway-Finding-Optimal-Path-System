@@ -25,31 +25,33 @@ public class ReinforcementLearning implements OptimizationAlgorithm {
         Solution bestSolution = generateInitialSolution(problem);
         double bestReward = calculateReward(bestSolution, problem);
         
+        // 记录找到可行解的次数，用于提前停止条件
+        int feasibleSolutionsCount = 0;
+        int stagnationLimit = 1000;  // 连续找到可行解多少次后停止
+        
         // Training phase
         for (int episode = 0; episode < episodes; episode++) {
             Solution solution = runEpisode(problem);
             double reward = calculateReward(solution, problem);
             
+            // 更新最优解
             if (reward > bestReward) {
                 bestReward = reward;
                 bestSolution = solution.clone();
-            }
-            
-            // 如果找到了可行解就提前结束
-            if (solution.getTotalTime() <= problem.getTimeConstraint()) {
-                bestSolution = solution.clone();
-                break;
-            }
-        }
-        
-        // 如果没有找到可行解，生成一个贪心解
-        if (bestSolution.getTotalTime() > problem.getTimeConstraint()) {
-            Solution greedySolution = generateGreedySolution(problem);
-            if (greedySolution.getTotalTime() <= problem.getTimeConstraint()) {
-                bestSolution = greedySolution;
+                
+                // 如果是可行解，记录下来
+                if (solution.getTotalTime() <= problem.getTimeConstraint()) {
+                    feasibleSolutionsCount++;
+                    
+                    // 如果连续找到大量可行解且没有改善，才考虑提前停止
+                    if (feasibleSolutionsCount > stagnationLimit) {
+                        break;
+                    }
+                } else {
+                    feasibleSolutionsCount = 0;  // 重置计数
+                }
             }
         }
-        
         return bestSolution;
     }
     

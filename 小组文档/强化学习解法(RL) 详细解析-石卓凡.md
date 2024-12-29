@@ -31,50 +31,88 @@ graph TD
     I -->|是| J[返回最优解]
 ```
 
+**单次流程图**
+
+```mermaid
+sequenceDiagram
+    participant A as 当前状态
+    participant B as 动作选择器
+    participant C as 环境
+    participant D as Q表
+  
+    A->>B: 获取当前状态
+    B->>B: ε-贪心选择
+    B->>C: 执行选中的动作
+    C->>C: 计算奖励
+    C->>D: 更新Q值
+    C->>A: 转移到新状态
+```
+
 ### 3. 关键公式
 
 1. **Q值更新公式**：
-
    $$
    Q(s,a) = Q(s,a) + α[R + γ\max_{a'}Q(s',a') - Q(s,a)]
    $$
    其中：
-   
+
    - $$
      Q(s,a)是状态s下采取动作a的价值
      $$
-   
-     
+
    - $$
      α 是学习率
      $$
-   
-     
+
    - $$
      R 是即时奖励
      $$
-   
-     
+
    - $$
      γ 是折扣因子
      $$
-   
-     
+
    - $$
      \max_{a'}Q(s',a') 是下一状态的最大Q值
      $$
-   
-     
+
 2. **ε-贪心策略**：
+
+   ```mermaid
+   graph TD
+       A[开始选择动作] --> B{随机数 < epsilon?}
+       B -->|是| C[探索: 随机选择动作]
+       B -->|否| D[利用: 选择Q值最大的动作]
+       C --> E[返回选择的动作]
+       D --> E
+   ```
+
+   
 
    ```java:src/main/java/algorithm/ReinforcementLearning.java
    private int selectAction(String state, int actionCount) {
-       if (random.nextDouble() < epsilon) {  // 探索
+       // 探索：以 epsilon 的概率随机选择
+       if (random.nextDouble() < epsilon) {
            return random.nextInt(actionCount);
        }
+     
        // 利用：选择Q值最大的动作
        double[] qValues = qTable.get(state);
        return maxQValueIndex(qValues);
+   }
+   
+   // 找出Q值最大的动作索引
+   private int maxQValueIndex(double[] qValues) {
+       int maxIndex = 0;
+       double maxValue = qValues[0];
+     
+       for (int i = 1; i < qValues.length; i++) {
+           if (qValues[i] > maxValue) {
+               maxValue = qValues[i];
+               maxIndex = i;
+           }
+       }
+       return maxIndex;
    }
    ```
 
@@ -84,28 +122,39 @@ graph TD
 
 ```java:src/main/java/algorithm/ReinforcementLearning.java
 public Solution solve(Problem problem) {
-    initializeQTable(problem);
-    Solution bestSolution = generateInitialSolution(problem);
-    double bestReward = calculateReward(bestSolution, problem);
-  
-    // 训练阶段
-    for (int episode = 0; episode < episodes; episode++) {
-        Solution solution = runEpisode(problem);
-        double reward = calculateReward(solution, problem);
-    
-        if (reward > bestReward) {
-            bestReward = reward;
-            bestSolution = solution.clone();
+        initializeQTable(problem);
+        Solution bestSolution = generateInitialSolution(problem);
+        double bestReward = calculateReward(bestSolution, problem);
+        
+        // 记录找到可行解的次数，用于提前停止条件
+        int feasibleSolutionsCount = 0;
+        int stagnationLimit = 1000;  // 连续找到可行解多少次后停止
+        
+        // Training phase
+        for (int episode = 0; episode < episodes; episode++) {
+            Solution solution = runEpisode(problem);
+            double reward = calculateReward(solution, problem);
+            
+            // 更新最优解
+            if (reward > bestReward) {
+                bestReward = reward;
+                bestSolution = solution.clone();
+                
+                // 如果是可行解，记录下来
+                if (solution.getTotalTime() <= problem.getTimeConstraint()) {
+                    feasibleSolutionsCount++;
+                    
+                    // 如果连续找到大量可行解且没有改善，才考虑提前停止
+                    if (feasibleSolutionsCount > stagnationLimit) {
+                        break;
+                    }
+                } else {
+                    feasibleSolutionsCount = 0;  // 重置计数
+                }
+            }
         }
-    
-        // 如果找到可行解就提前结束
-        if (solution.getTotalTime() <= problem.getTimeConstraint()) {
-            bestSolution = solution.clone();
-            break;
-        }
+        return bestSolution;
     }
-    return bestSolution;
-}
 ```
 
 2. **单次回合执行**
@@ -171,95 +220,7 @@ private double calculateStepReward(Path path, double currentTime, double timeCon
    - 延迟奖励：通过折扣因子传播
    - 超时惩罚：确保时间约束
 
-### 6. 优化策略
-
-1. **初始解生成**
-
-```java:src/main/java/algorithm/ReinforcementLearning.java
-private Solution generateInitialSolution(Problem problem) {
-    // 使用贪心策略生成初始解
-    // 选择每个顾客的最短时间路径
-}
-```
-
-2. **贪心解兜底**
-
-```java:src/main/java/algorithm/ReinforcementLearning.java
-if (bestSolution.getTotalTime() > problem.getTimeConstraint()) {
-    Solution greedySolution = generateGreedySolution(problem);
-    if (greedySolution.getTotalTime() <= problem.getTimeConstraint()) {
-        bestSolution = greedySolution;
-    }
-}
-```
-
-这个RL实现结合了Q-learning的理论框架和问题特定的优化策略，通过反复试错来学习最优的路径选择策略。
-
-
-## 如何选择action
-
-在RL算法中，动作选择使用了ε-贪心策略（Epsilon-Greedy）。让我详细解释这个过程：
-
-### 1. 动作选择的核心代码
-
-```java:src/main/java/algorithm/ReinforcementLearning.java
-private int selectAction(String state, int actionCount) {
-    // 探索：以 epsilon 的概率随机选择
-    if (random.nextDouble() < epsilon) {
-        return random.nextInt(actionCount);
-    }
-  
-    // 利用：选择Q值最大的动作
-    double[] qValues = qTable.get(state);
-    return maxQValueIndex(qValues);
-}
-
-// 找出Q值最大的动作索引
-private int maxQValueIndex(double[] qValues) {
-    int maxIndex = 0;
-    double maxValue = qValues[0];
-  
-    for (int i = 1; i < qValues.length; i++) {
-        if (qValues[i] > maxValue) {
-            maxValue = qValues[i];
-            maxIndex = i;
-        }
-    }
-    return maxIndex;
-}
-```
-
-### 2. 选择过程图解
-
-```mermaid
-graph TD
-    A[开始选择动作] --> B{随机数 < epsilon?}
-    B -->|是| C[探索: 随机选择动作]
-    B -->|否| D[利用: 选择Q值最大的动作]
-    C --> E[返回选择的动作]
-    D --> E
-```
-
-### 完整的选择-更新循环
-
-```mermaid
-sequenceDiagram
-    participant A as 当前状态
-    participant B as 动作选择器
-    participant C as 环境
-    participant D as Q表
-  
-    A->>B: 获取当前状态
-    B->>B: ε-贪心选择
-    B->>C: 执行选中的动作
-    C->>C: 计算奖励
-    C->>D: 更新Q值
-    C->>A: 转移到新状态
-```
-
-## Q表格示例
-
-### Q表格 (Q-Table)
+### 6. Q表格 (Q-Table)示例
 
 | 顾客\路径  | path_0 | path_1 | path_2 | path_3 |
 | ---------- | ------ | ------ | ------ | ------ |
