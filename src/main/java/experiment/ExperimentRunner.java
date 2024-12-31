@@ -16,20 +16,38 @@ public class ExperimentRunner {
         // 1. 有效性实验数据集
         System.out.println("\n=== 有效性实验 ===");
         ExperimentLogger.addSheet("有效性实验");
-        Map<String, Object> effectivenessData = generateTestData("effectiveness_test.json", 5, 30, 5); // 使用较小的数据集以便回溯算法能在合理时间内找到最优解
-        Problem effectivenessProblem = createProblem(effectivenessData);
         
-        // 首先使用回溯算法找到最优解
-        System.out.println("\n使用回溯算法寻找最优解:");
-        OptimizationAlgorithm backtracking = AlgorithmFactory.createAlgorithm("BK", new HashMap<>());
-        Solution optimalSolution = backtracking.solve(effectivenessProblem);
-        System.out.printf("最优解成本: %.2f\n", optimalSolution.getTotalCost());
-        System.out.printf("最优解时间: %.2f 分钟\n", optimalSolution.getTotalTime());
+        // 定义三个不同规模的数据集
+        int[][] datasetSizes = {
+            {3, 5, 3},    // 小规模：3个餐厅，5个顾客，每个顾客3条路径
+            {5, 15, 5},   // 中规模：5个餐厅，10个顾客，每个顾客5条路径
+            {8, 30, 8}    // 大规模：8个餐厅，15个顾客，每个顾客8条路径
+        };
         
-        // 然后测试其他算法
-        for (String algorithmType : ALGORITHMS) {
-            System.out.printf("\n使用 %s:\n", algorithmType);
-            runEffectivenessExperiment(effectivenessProblem, algorithmType, optimalSolution);
+        for (int i = 0; i < datasetSizes.length; i++) {
+            int[] size = datasetSizes[i];
+            String datasetName = String.format("effectiveness_test_%d.json", i + 1);
+            System.out.printf("\n数据集 %d (餐厅:%d, 顾客:%d, 路径:%d)\n", 
+                i + 1, size[0], size[1], size[2]);
+            
+            // 生成并加载数据集
+            Map<String, Object> effectivenessData = generateTestData(
+                datasetName, size[0], size[1], size[2]
+            );
+            Problem effectivenessProblem = createProblem(effectivenessData);
+            
+            // 使用回溯算法找到最优解
+            System.out.println("\n使用回溯算法寻找最优解:");
+            OptimizationAlgorithm backtracking = AlgorithmFactory.createAlgorithm("BK", new HashMap<>());
+            Solution optimalSolution = backtracking.solve(effectivenessProblem);
+            System.out.printf("最优解成本: %.2f\n", optimalSolution.getTotalCost());
+            System.out.printf("最优解时间: %.2f 分钟\n", optimalSolution.getTotalTime());
+            
+            // 测试其他算法
+            for (String algorithmType : ALGORITHMS) {
+                System.out.printf("\n使用 %s:\n", algorithmType);
+                runEffectivenessExperiment(effectivenessProblem, algorithmType, optimalSolution, i + 1);
+            }
         }
         
         // 2. 效率实验数据集
@@ -94,32 +112,55 @@ public class ExperimentRunner {
         );
     }
     
-    private static void runEffectivenessExperiment(Problem problem, String algorithmType, Solution optimalSolution) {
-        OptimizationAlgorithm algorithm = AlgorithmFactory.createAlgorithm(algorithmType, new HashMap<>());
-        Solution solution = algorithm.solve(problem);
+    private static void runEffectivenessExperiment(Problem problem, String algorithmType, 
+                                                  Solution optimalSolution, int datasetId) {
+        List<Double> costs = new ArrayList<>();
+        List<Double> times = new ArrayList<>();
+        List<Boolean> feasibilities = new ArrayList<>();
+        
+        // 运行多次并收集结果
+        for (int i = 0; i < REPEAT_TIMES; i++) {
+            OptimizationAlgorithm algorithm = AlgorithmFactory.createAlgorithm(algorithmType, new HashMap<>());
+            Solution solution = algorithm.solve(problem);
+            costs.add(solution.getTotalCost());
+            times.add(solution.getTotalTime());
+            feasibilities.add(solution.getTotalTime() <= problem.getTimeConstraint());
+        }
+        
+        // 计算平均值和标准差
+        double avgCost = calculateMean(costs);
+        double avgTime = calculateMean(times);
+        double costStdDev = calculateStdDev(costs);
+        double timeStdDev = calculateStdDev(times);
+        int feasibleCount = feasibilities.stream().mapToInt(b -> b ? 1 : 0).sum();
         
         // 计算与最优解的差距
-        double costGap = ((solution.getTotalCost() - optimalSolution.getTotalCost()) / optimalSolution.getTotalCost()) * 100;
-        double timeGap = ((solution.getTotalTime() - optimalSolution.getTotalTime()) / optimalSolution.getTotalTime()) * 100;
+        double costGap = ((avgCost - optimalSolution.getTotalCost()) / optimalSolution.getTotalCost()) * 100;
+        double timeGap = ((avgTime - optimalSolution.getTotalTime()) / optimalSolution.getTotalTime()) * 100;
         
         // 控制台输出
-        System.out.printf("总成本: %.2f (与最优解差距: %.2f%%)\n", 
-            solution.getTotalCost(), costGap);
-        System.out.printf("总时间: %.2f 分钟 (与最优解差距: %.2f%%)\n", 
-            solution.getTotalTime(), timeGap);
-        System.out.printf("是否满足时间约束: %s\n", 
-            solution.getTotalTime() <= problem.getTimeConstraint() ? "是" : "否");
+        System.out.printf("平均总成本: %.2f ± %.2f (与最优解差距: %.2f%%)\n", 
+            avgCost, costStdDev, costGap);
+        System.out.printf("平均总时间: %.2f ± %.2f 分钟 (与最优解差距: %.2f%%)\n", 
+            avgTime, timeStdDev, timeGap);
+        System.out.printf("可行解比例: %d/%d (%.1f%%)\n", 
+            feasibleCount, REPEAT_TIMES, (feasibleCount * 100.0 / REPEAT_TIMES));
             
         // Excel记录
         Map<String, Object> result = new HashMap<>();
+        result.put("数据集编号", datasetId);
         result.put("算法类型", algorithmType);
-        result.put("总成本", solution.getTotalCost());
+        result.put("平均总成本", avgCost);
+        result.put("成本标准差", costStdDev);
         result.put("最优解成本", optimalSolution.getTotalCost());
         result.put("成本差距(%)", costGap);
-        result.put("总时间(分钟)", solution.getTotalTime());
+        result.put("平均总时间(分钟)", avgTime);
+        result.put("时间标准差", timeStdDev);
         result.put("最优解时间(分钟)", optimalSolution.getTotalTime());
         result.put("时间差距(%)", timeGap);
-        result.put("是否满足时间约束", solution.getTotalTime() <= problem.getTimeConstraint() ? "是" : "否");
+        result.put("可行解比例(%)", feasibleCount * 100.0 / REPEAT_TIMES);
+        result.put("顾客数量", problem.getCustomers().size());
+        result.put("每顾客路径数", problem.getPaths().get("customer_0").size());
         ExperimentLogger.logResult(result);
     }
     
@@ -238,5 +279,14 @@ public class ExperimentRunner {
             .mapToDouble(x -> Math.pow(x - mean, 2))
             .average()
             .orElse(0.0);
+    }
+    
+    private static double calculateStdDev(List<Double> numbers) {
+        double mean = calculateMean(numbers);
+        double variance = numbers.stream()
+            .mapToDouble(x -> Math.pow(x - mean, 2))
+            .average()
+            .orElse(0.0);
+        return Math.sqrt(variance);
     }
 } 
